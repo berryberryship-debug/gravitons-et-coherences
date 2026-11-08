@@ -14,9 +14,11 @@ Le modèle repose sur l'étude de matrices stochastiques de transition \(W(\alph
 ## 🔬 Résultats Numériques (Divergence Critique)
 Nous avons testé la robustesse de la géométrie sous le flot de Toda sur trois chaînes de Markov (Curie-Weiss, Ehrenfest, et Ehrenfest "paresseuse"). 
 Le résultat principal est la mise en évidence d'une **divergence logarithmique** du temps critique \(t_c\) (le moment où la géométrie se brise) pour la chaîne d'Ehrenfest paresseuse :
+
 \[
  t_c \approx \frac{n}{2} \ln\left(\frac{1}{\epsilon}\right) 
 \]
+
 - **Ajustement** : \(R^2 = 0.999771\)
 - **Pente mesurée** : \(a = 16.1235\) (proche de la prédiction théorique \(n/2 = 15.5\) pour \(n=31\)).
 
@@ -28,17 +30,10 @@ Le résultat principal est la mise en évidence d'une **divergence logarithmique
 
 ## ⚙️ Installation et Exécution
 Pour reproduire les résultats :
+
 ```bash
 # Installer la dépendance
 pip install numpy
 
 # Lancer la simulation
 python test_phase_transition.py
-## 🏆 Preuve Finale : Singularité Topologique (Point Diabolique)
-
-Le transport adiabatique du vecteur d'état le long d'un lacet fermé dans l'espace des paramètres \((A, t)\) a été simulé avec succès. 
-
-- **Phase de Berry accumulée** : \(3.1416\) radians, soit exactement **\(\pi\)**.
-- **Signature** : Inversion du vecteur propre (monodromie) à la fermeture de la boucle.
-
-Cette phase non-triviale (invariant \(\mathbb{Z}_2\)) prouve l'existence d'un **véritable point diabolique** (cône de Dirac). La géométrie pré-spatiale possède une charge topologique robuste, immunisée contre le bruit (barrière néguentropique).
