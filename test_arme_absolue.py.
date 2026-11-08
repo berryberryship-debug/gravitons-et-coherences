@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Premier changement d'inertie du bloc J[0:15,0:15] sous le flot de Toda.
+Chaîne de Ehrenfest paresseuse (N=32, ell=0.45), symétrisée.
+
+Objectif : minimiser T1(h) = premier instant où le nombre de valeurs propres
+négatives du bloc change, sous les contraintes
+  (C1) max |h_i| <= 0.2  (h_i ajouté aux 31 hors-diagonales)
+  (C2) inertie initiale du bloc = celle du témoin (n_neg(0) = 1)
+  (C3) marge statique : min |lambda_bloc(0)| >= 1e-2
+Les contraintes C2 et C3 excluent le « réglage fin » d'une valeur propre
+posée juste au-dessus de zéro (mécanisme statique, sans lien avec le flot).
+"""
+import sys, time
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+N, M, ELL = 32, 15, 0.45
+C_MAX, MARGE = 0.20, 1e-2
+DT, CAP = 0.02, 4.0
+
+def base_J(n=N - 1, ell=ELL):
+    W = np.zeros((n + 1, n + 1))
+    for k in range(n + 1):
+        if k < n: W[k + 1, k] = (n - k) / n
+        if k > 0: W[k - 1, k] = k / n
+    W = (1 - ell) * W + ell * np.eye(n + 1)
+    ev, vec = np.linalg.eig(W)
+    p = np.real(vec[:, np.argmin(abs(ev - 1))])
+    p = p * np.sign(p.sum()); p /= p.sum()
+    J = np.diag(1 / np.sqrt(p)) @ W @ np.diag(np.sqrt(p))
+    return 0.5 * (J + J.T)
+
+def inject(J0, h):
+    J = J0.copy()
+    i = np.arange(len(h))
+    J[i, i + 1] += h
+    J[i + 1, i] += h
+    return J
+
+def toda(J):
+    B = np.tril(J, -1) - np.triu(J, 1)
+    return B @ J - J @ B
+
+def rk4(J, dt):
+    k1 = toda(J); k2 = toda(J + .5 * dt * k1)
+    k3 = toda(J + .5 * dt * k2); k4 = toda(J + dt * k3)
+    return J + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+
+def inertie(J):
+    w = np.linalg.eigvalsh(J[:M, :M])
+    return int((w < 0).sum()), float(np.abs(w).min())
+
+def faisable(J, n_ref):
+    n, mn = inertie(J)
+    return n == n_ref and mn >= MARGE
+
+def T1(J, dt=DT, cap=CAP):
+    n0 = inertie(J)[0]
+    t = 0.0
+    while t < cap:
+        J = rk4(J, dt); t += dt
+        if inertie(J)[0] != n0:
+            return t
+    return cap + inertie(J)[1]
+
+def evolution(J0, x0, n_ref, budget, rng):
+    best = x0.copy(); fbest = T1(inject(J0, best)); sig = 0.05; ev = 1
+    while ev < budget:
+        cand = np.clip(best + sig * rng.normal(size=best.size), -C_MAX, C_MAX)
+        Jc = inject(J0, cand)
+        if not faisable(Jc, n_ref):
+            sig *= 0.98; continue
+        f = T1(Jc); ev += 1
+        if f <= fbest:
+            best, fbest = cand, f; sig = min(0.15, sig * 1.2)
+        else:
+            sig = max(0.005, sig * 0.9)
+    return best, fbest
+
+def courbe_inertie(J, tmax=15.0, dt=0.01):
+    ts, ns = [], []
+    t = 0.0
+    while t <= tmax:
+        ts.append(t); ns.append(inertie(J)[0])
+        J = rk4(J, dt); t += dt
+    return np.array(ts), np.array(ns)
+
+def main(budget=400, seeds=3, n_alea=200):
+    J0 = base_J()
+    n_ref, marge0 = inertie(J0)
+    t_tem = T1(J0)
+    print(f"Témoin : n_neg(0)={n_ref}, marge={marge0:.3e}, T1={t_tem:.3f}")
+
+    rng = np.random.default_rng(0)
+    vals = []
+    t0 = time.time()
+    while len(vals) < n_alea and time.time() - t0 < 60:
+        h = rng.uniform(-C_MAX, C_MAX, 31) if rng.random() < .5 else C_MAX * rng.choice([-1, 1], 31)
+        Jc = inject(J0, h)
+        if faisable(Jc, n_ref):
+            vals.append(T1(Jc))
+    vals = np.array(vals)
+    print(f"Aléatoires faisables ({len(vals)}) : T1 moyen={vals.mean():.3f}, "
+          f"min={vals.min():.3f}, max={vals.max():.3f}, "
+          f"fraction < témoin = {(vals < t_tem).mean():.2f}")
+
+    resultats = []
+    for s in range(seeds):
+        r = np.random.default_rng(100 + s)
+        x0 = np.zeros(31) if s == 0 else None
+        while x0 is None:
+            c = r.uniform(-C_MAX, C_MAX, 31)
+            if faisable(inject(J0, c), n_ref): x0 = c
+        t1 = time.time()
+        h, f = evolution(J0, x0, n_ref, budget, r)
+        resultats.append((f, h))
+        print(f"  graine {s} : T1 optimisé = {f:.3f}  ({time.time()-t1:.0f}s)")
+    f_best, h_best = min(resultats, key=lambda z: z[0])
+
+    Jb = inject(J0, h_best)
+    print(f"\nMeilleur : T1(dt={DT}) = {f_best:.3f} ; T1(dt=0.005) = {T1(Jb, dt=0.005):.3f}"
+          f" ; témoin(dt=0.005) = {T1(J0, dt=0.005):.3f}")
+    n_b, m_b = inertie(Jb)
+    print(f"  n_neg(0)={n_b}, marge={m_b:.3e}, max|h|={np.abs(h_best).max():.3f}, "
+          f"hors-diagonales négatives de J : {(np.diag(Jb, 1) < 0).sum()}")
+    print(f"  spectre de J perturbée : [{np.linalg.eigvalsh(Jb).min():+.3f}, {np.linalg.eigvalsh(Jb).max():+.3f}]")
+
+    t1_, n1 = courbe_inertie(J0)
+    t2_, n2 = courbe_inertie(Jb)
+    plt.figure(figsize=(8, 4.5))
+    plt.step(t1_, n1, where='post', color='k', lw=2, label=f"Témoin (T1={t_tem:.2f})")
+    plt.step(t2_, n2, where='post', color='r', lw=2, label=f"Optimisé (T1={f_best:.2f})")
+    plt.xlabel("Temps t"); plt.ylabel("Nombre de valeurs propres négatives du bloc")
+    plt.legend(); plt.grid(True, ls='--'); plt.tight_layout()
+    plt.savefig("inertie_optimise_vs_temoin.png", dpi=120)
+    np.save("h_optimal.npy", h_best)
+    print("Figure : inertie_optimise_vs_temoin.png ; perturbation : h_optimal.npy")
+
+if __name__ == "__main__":
+    b = int(sys.argv[1]) if len(sys.argv) > 1 else 400
+    main(budget=b)
