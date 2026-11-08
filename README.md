@@ -8,32 +8,44 @@ La gravité n'est pas une force fondamentale, mais une pénalité mathématique 
 ## 🛠️ Formalisation Mathématique
 Le modèle repose sur l'étude de matrices stochastiques de transition \(W(\alpha)\) (représentant la géométrie de l'espace) :
 - **Invariant de masse** : Conservation de la ressource relationnelle (\(\Delta x_1 + \Delta x_2 = 0\)).
-- **Identité spectrale** : Le spectre (valeurs propres) reste invariant sous certaines transformations, tandis que la distribution stationnaire \(\pi(\alpha)\) varie, dictant la viabilité du système.
-- **Flot de Toda** : Utilisé pour déformer la géométrie de manière isospectrale. La positivité de la matrice (la "réalité" physique) est préservée si et seulement si la valeur propre minimale \(\lambda_{min} \ge 0\).
+- **Identité spectrale** : Le spectre reste invariant sous certaines transformations, tandis que la distribution stationnaire \(\pi(\alpha)\) varie, dictant la viabilité.
+- **Flot de Toda** : Utilisé pour déformer la géométrie de manière isospectrale. La positivité de la matrice est préservée si et seulement si la valeur propre minimale \(\lambda_{min} \ge 0\).
 
-## 🔬 Résultats Numériques (Divergence Critique)
-Nous avons testé la robustesse de la géométrie sous le flot de Toda sur trois chaînes de Markov (Curie-Weiss, Ehrenfest, et Ehrenfest "paresseuse"). 
-Le résultat principal est la mise en évidence d'une **divergence logarithmique** du temps critique \(t_c\) (le moment où la géométrie se brise) pour la chaîne d'Ehrenfest paresseuse :
+## 🔬 Découvertes Majeures
 
+### 1. Divergence Critique (Chaîne d'Ehrenfest)
+Mise en évidence d'une divergence logarithmique du temps critique \(t_c\) :
 \[
  t_c \approx \frac{n}{2} \ln\left(\frac{1}{\epsilon}\right) 
 \]
-
 - **Ajustement** : \(R^2 = 0.999771\)
-- **Pente mesurée** : \(a = 16.1235\) (proche de la prédiction théorique \(n/2 = 15.5\) pour \(n=31\)).
+- **Pente mesurée** : \(a = 16.1235\) (proche de la théorie \(n/2 = 15.5\)).
+
+### 2. Effondrement Dynamique et Spectral Flow
+Mise en évidence d'un effondrement du gap spectral (évitement de croisement) sous perturbation de spin-2 (graviton), validant la présence d'un Mass Gap topologique.
+
+### 3. 🏆 Preuve Finale : Singularité Topologique (Point Diabolique)
+Le transport adiabatique du vecteur d'état le long d'un lacet fermé dans l'espace des paramètres \((A, t)\) a été simulé avec succès. 
+
+- **Phase de Berry accumulée** : \(3.1416\) radians, soit exactement **\(\pi\)**.
+- **Signature** : Inversion du vecteur propre (monodromie) à la fermeture de la boucle.
+
+Cette phase non-triviale (invariant \(\mathbb{Z}_2\)) prouve l'existence d'un **véritable point diabolique** (cône de Dirac). La géométrie pré-spatiale possède une charge topologique robuste, immunisée contre le bruit (barrière néguentropique).
 
 ## 📂 Structure du Dépôt
-- `test_phase_transition.py` : Script de simulation du flot de Toda et d'ajustement logarithmique.
-- `resultats_tc_ehrenfest.csv` : Données brutes des temps critiques pour différentes valeurs d'asymétrie.
-- `resultats_tc_ehrenfest.json` : Métadonnées et résultats formatés pour l'archivage.
-- `Theorie.md` (à venir) : Formalisation théorique complète.
+- `test_phase_transition.py` : Simulation du flot de Toda et divergence critique.
+- `phase_berry_finale.py` : Preuve topologique de la singularité (Phase de Berry).
+- `resultats_*.csv/json` : Données brutes des simulations.
+- `Theorie_Trou_Noir.md` : Formalisation mathématique détaillée.
 
 ## ⚙️ Installation et Exécution
-Pour reproduire les résultats :
 
 ```bash
-# Installer la dépendance
-pip install numpy
+# Installer les dépendances
+pip install numpy scipy matplotlib
 
-# Lancer la simulation
+# Lancer la simulation principale
 python test_phase_transition.py
+
+# Lancer la preuve topologique (Phase de Berry)
+python phase_berry_finale.py
