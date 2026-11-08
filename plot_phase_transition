@@ -1,0 +1,55 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import json
+
+# On va utiliser les données qu'on vient de générer (ou les recalculer si le fichier n'est pas là)
+try:
+    with open("resultats_tc_ehrenfest.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    results = data["results"]
+    fit_a = data["metadata"]["fit"]["a"]
+    fit_b = data["metadata"]["fit"]["b"]
+    r2 = data["metadata"]["fit"]["R2"]
+except FileNotFoundError:
+    print("Erreur : Lance d'abord test_phase_transition.py pour générer les données.")
+    exit()
+
+# Préparation des données pour le graphique
+eps_values = []
+tc_values = []
+
+for item in results:
+    if item["tc"] is not None:
+        eps_values.append(item["eps"])
+        tc_values.append(item["tc"])
+
+eps_values = np.array(eps_values)
+tc_values = np.array(tc_values)
+
+# Calcul de x = ln(1/eps)
+x = np.log(1.0 / eps_values)
+
+# Création du graphique
+plt.figure(figsize=(10, 6))
+
+# Les points mesurés
+plt.scatter(x, tc_values, color='blue', label='Simulations numériques', zorder=5)
+
+# La droite d'ajustement (théorie)
+# t_c = a * ln(1/eps) + b
+x_fit = np.linspace(min(x), max(x), 100)
+y_fit = fit_a * x_fit + fit_b
+plt.plot(x_fit, y_fit, color='red', linestyle='--', label=f'Ajustement : a={fit_a:.2f}, R²={r2:.5f}')
+
+plt.title("Divergence logarithmique du temps critique (Flot de Toda)", fontsize=14)
+plt.xlabel("ln(1/ε)", fontsize=12)
+plt.ylabel("Temps critique t_c", fontsize=12)
+plt.legend()
+plt.grid(True, linestyle=':', alpha=0.7)
+
+# Sauvegarde du graphique
+plt.savefig("divergence_logarithmique.png", dpi=300, bbox_inches='tight')
+print("Graphique sauvegardé sous : divergence_logarithmique.png")
+
+# Affichage à l'écran
+plt.show()
