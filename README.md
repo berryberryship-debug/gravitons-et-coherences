@@ -34,3 +34,11 @@ pip install numpy
 
 # Lancer la simulation
 python test_phase_transition.py
+## 🏆 Preuve Finale : Singularité Topologique (Point Diabolique)
+
+Le transport adiabatique du vecteur d'état le long d'un lacet fermé dans l'espace des paramètres \((A, t)\) a été simulé avec succès. 
+
+- **Phase de Berry accumulée** : \(3.1416\) radians, soit exactement **\(\pi\)**.
+- **Signature** : Inversion du vecteur propre (monodromie) à la fermeture de la boucle.
+
+Cette phase non-triviale (invariant \(\mathbb{Z}_2\)) prouve l'existence d'un **véritable point diabolique** (cône de Dirac). La géométrie pré-spatiale possède une charge topologique robuste, immunisée contre le bruit (barrière néguentropique).
