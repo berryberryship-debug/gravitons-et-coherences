@@ -1,0 +1,123 @@
+import numpy as np
+from scipy.optimize import brentq
+import matplotlib.pyplot as plt
+
+# ==========================================
+# 1. FONCTIONS DE BASE (Construction & Flot)
+# ==========================================
+def build_base_J(n=31, ell=0.45):
+    N = n + 1
+    W0 = np.zeros((N, N))
+    for k in range(N):
+        if k < n: W0[k+1, k] = (n - k) / n
+        if k > 0: W0[k-1, k] = k / n
+    W0 = (1 - ell) * W0 + ell * np.eye(N)
+    eigvals, eigvecs = np.linalg.eig(W0)
+    idx = np.argmin(np.abs(eigvals - 1.0))
+    pi0 = np.real(eigvecs[:, idx])
+    if np.sum(pi0) < 0: pi0 = -pi0
+    pi0 /= np.sum(pi0)
+    D_sqrt = np.diag(np.sqrt(pi0))
+    D_inv_sqrt = np.diag(1.0 / np.sqrt(pi0))
+    J0 = D_inv_sqrt @ W0 @ D_sqrt
+    return 0.5 * (J0 + J0.T)
+
+def inject_perturbation(J0, h):
+    J = J0.copy()
+    i = np.arange(len(h))
+    J[i, i + 1] += h
+    J[i + 1, i] += h
+    return J
+
+def toda_rhs(J):
+    B = np.tril(J, -1) - np.triu(J, 1)
+    return B @ J - J @ B
+
+def rk4_step(J, dt):
+    k1 = toda_rhs(J)
+    k2 = toda_rhs(J + 0.5*dt*k1)
+    k3 = toda_rhs(J + 0.5*dt*k2)
+    k4 = toda_rhs(J + dt*k3)
+    return J + (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
+
+def get_D_m(J, m=15):
+    b = np.diag(J).copy()
+    a = np.diag(J, k=1).copy()
+    D = np.zeros(len(b))
+    D[0] = b[0]
+    if len(b) > 1:
+        D[1] = b[1]*D[0] - a[0]**2
+        for k in range(2, len(b)):
+            D[k] = b[k]*D[k-1] - a[k-1]**2 * D[k-2]
+    return D[m-1]
+
+# ==========================================
+# 2. RECHERCHE DU ZÉRO SPECTRAL EXACT
+# ==========================================
+def trouver_tc_spectral(J_start, m=15, dt_fin=0.001, max_t=20.0):
+    """Avance le temps jusqu'à ce qu'une valeur propre traverse 0."""
+    J = J_start.copy()
+    t = 0.0
+    n_neg_init = int((np.linalg.eigvalsh(J[:m, :m]) < 0).sum())
+    
+    while t < max_t:
+        J_next = rk4_step(J, dt_fin)
+        w_next = np.linalg.eigvalsh(J_next[:m, :m])
+        n_neg_next = int((w_next < 0).sum())
+        
+        # Détection du changement d'inertie (Spectral Flow)
+        if n_neg_next != n_neg_init:
+            # On a trouvé l'intervalle [t, t+dt_fin] où une valeur propre traverse 0.
+            # On utilise brentq pour trouver le t* exact.
+            
+            # Fonction qui renvoie la valeur propre qui est en train de traverser.
+            # (C'est la plus proche de 0)
+            def lambda_func(tau):
+                J_temp = J.copy()
+                steps = max(1, int(tau / dt_fin))
+                for _ in range(steps):
+                    J_temp = rk4_step(J_temp, tau / steps)
+                w = np.linalg.eigvalsh(J_temp[:m, :m])
+                return w[np.argmin(np.abs(w))] # La valeur propre la plus proche de 0
+            
+            # Bissection sur lambda_func entre 0 et dt_fin
+            t_star_offset = brentq(lambda_func, 0.0, dt_fin, xtol=1e-8)
+            t_star = t + t_star_offset
+            
+            # Évaluation exacte à t_star
+            J_star = J.copy()
+            steps = max(1, int(t_star_offset / dt_fin))
+            for _ in range(steps):
+                J_star = rk4_step(J_star, t_star_offset / steps)
+                
+            D_star = get_D_m(J_star, m)
+            w_star = np.linalg.eigvalsh(J_star[:m, :m])
+            
+            return t_star, D_star, w_star, n_neg_next
+            
+        J = J_next
+        t += dt_fin
+        
+    return None, None, None, None
+
+if __name__ == "__main__":
+    J0 = build_base_J()
+    np.random.seed(42)
+    h = np.random.uniform(-0.1, 0.1, 31) 
+    J_pert = inject_perturbation(J0, h)
+    
+    print("--- ANALYSE DU SPECTRAL FLOW (ZÉRO EXACT) ---")
+    
+    for name, J_test in [("Témoin", J0), ("Perturbé", J_pert)]:
+        print(f"\n[{name}]")
+        t_star, D_star, w_star, n_neg = trouver_tc_spectral(J_test)
+        
+        if t_star:
+            print(f"  -> t* (zéro exact) = {t_star:.5f}")
+            print(f"  -> D_15(t*) = {D_star:.2e} (doit être ~0)")
+            print(f"  -> Spectre local à t* :")
+            print(f"     Lambda_min = {w_star[0]:.2e}")
+            print(f"     Valeurs proches de 0 : {w_star[np.abs(w_star) < 1e-4]}")
+            print(f"  -> Inertie = {n_neg}")
+        else:
+            print("  -> Pas de transition détectée.")
