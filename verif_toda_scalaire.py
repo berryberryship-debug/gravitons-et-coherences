@@ -22,7 +22,8 @@ def verifier_equations_toda(N=6):
         db_scalaire[k] = 2 * (a_k_moins_1_carre - a_k_carre)
         
     for k in range(N-1):
-        da_scalaire[k] = a[k] * (b[k+1] - b[k])
+        # CORRECTION ICI : Le signe de l'équation scalaire
+        da_scalaire[k] = a[k] * (b[k] - b[k+1])
         
     # 3. Extraction du résultat matriciel pour comparaison
     db_matriciel = np.diag(dJ_matriciel)
@@ -30,15 +31,15 @@ def verifier_equations_toda(N=6):
     
     # 4. Comparaison
     print("--- Vérification des équations de Toda ---")
-    print("Erreur sur la diagonale (db) :", np.max(np.abs(db_scalaire - db_matriciel)))
-    print("Erreur sur les hors-diagonales (da) :", np.max(np.abs(da_scalaire - da_matriciel)))
+    print(f"Erreur sur la diagonale (db) : {np.max(np.abs(db_scalaire - db_matriciel)):.2e}")
+    print(f"Erreur sur les hors-diagonales (da) : {np.max(np.abs(da_scalaire - da_matriciel)):.2e}")
     
     if np.allclose(db_scalaire, db_matriciel) and np.allclose(da_scalaire, da_matriciel):
         print("[SUCCÈS] Le crochet de Lax matriciel est EXACTEMENT équivalent aux équations scalaires.")
     else:
         print("[ÉCHEC] Il y a une différence. Vérifions la normalisation.")
 
-    # 5. NOUVEAU TEST : Vérification de la structure tridiagonale (Hors-bande)
+    # 5. Vérification de la structure tridiagonale (Hors-bande)
     masque = np.ones_like(dJ_matriciel, dtype=bool)
     for k in range(N):
         for j in range(N):
