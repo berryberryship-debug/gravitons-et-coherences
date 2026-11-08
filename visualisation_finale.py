@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import brentq
 import matplotlib.pyplot as plt
 
 # ==========================================
@@ -39,37 +40,41 @@ def rk4_step(J, dt):
     k4 = toda_rhs(J + dt*k3)
     return J + (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
 
-def get_D_m(J, m=15):
-    b = np.diag(J).copy()
-    a = np.diag(J, k=1).copy()
-    D = np.zeros(len(b))
-    D[0] = b[0]
-    if len(b) > 1:
-        D[1] = b[1]*D[0] - a[0]**2
-        for k in range(2, len(b)):
-            D[k] = b[k]*D[k-1] - a[k-1]**2 * D[k-2]
-    return D[m-1]
-
-def get_inertie(J, m=15):
-    w = np.linalg.eigvalsh(J[:m, :m])
-    return int((w < 0).sum())
+def exact_derivative(J, v):
+    dJdt = toda_rhs(J)
+    return float(v @ dJdt @ v)
 
 # ==========================================
-# 2. SIMULATION
+# 2. COLLECTE DES DONNÉES ET ERREUR
 # ==========================================
-def simuler(J_start, dt=0.01, max_t=12.0):
+def collect_data(J_start, dt=0.001, max_t=10.0):
     J = J_start.copy()
     t = 0.0
-    times, D_vals, inerties = [], [], []
+    ts, cross, dex, dnum = [], [], [], []
+    
+    w, v = np.linalg.eigh(J)
+    idx = np.argmin(np.abs(w))
+    lam_prev = w[idx]
     
     while t <= max_t:
-        times.append(t)
-        D_vals.append(get_D_m(J))
-        inerties.append(get_inertie(J))
+        w, v = np.linalg.eigh(J)
+        idx = np.argmin(np.abs(w))
+        lam = w[idx]
+        
+        ts.append(t)
+        cross.append(lam)
+        dex.append(exact_derivative(J, v[:, idx]))
+        
+        if len(cross) > 1:
+            dnum.append((lam - lam_prev) / dt)
+        else:
+            dnum.append(0.0)
+            
+        lam_prev = lam
         J = rk4_step(J, dt)
         t += dt
         
-    return np.array(times), np.array(D_vals), np.array(inerties)
+    return np.array(ts), np.array(cross), np.array(dex), np.array(dnum)
 
 if __name__ == "__main__":
     J0 = build_base_J()
@@ -77,47 +82,43 @@ if __name__ == "__main__":
     h = np.random.uniform(-0.1, 0.1, 31) 
     J_pert = inject_perturbation(J0, h)
 
-    t_star_temoin = 1.768858
-    t_star_pert = 9.793832
-
     print("Simulation en cours...")
-    t0, D0, I0 = simuler(J0)
-    t1, D1, I1 = simuler(J_pert)
+    t0, c0, de0, dn0 = collect_data(J0)
+    t1, c1, de1, dn1 = collect_data(J_pert)
 
-    # Création de la figure avec 2 panneaux explicites
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    # Calcul de l'erreur
+    err0 = np.abs(de0 - dn0)
+    err1 = np.abs(de1 - dn1)
 
-    # --- Panneau 1 : Déterminant D_15 ---
-    ax1.plot(t0, D0, color='teal', label='Témoin', linewidth=2)
-    ax1.plot(t1, D1, color='orange', label='Perturbé', linewidth=2)
-    ax1.axhline(0, color='black', linestyle='-', alpha=0.3)
-    
-    ax1.axvline(t_star_temoin, color='teal', linestyle='--', alpha=0.7)
-    ax1.axvline(t_star_pert, color='orange', linestyle='--', alpha=0.7)
-    
-    ax1.set_title("Déterminant \(D_{15}(t)\) (Passage par zéro)")
-    ax1.set_xlabel("Temps t")
-    ax1.set_ylabel("\(D_{15}\)")
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
+    fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
 
-    # --- Panneau 2 : Inertie (Spectral Flow) ---
-    ax2.step(t0, I0, color='teal', label='Témoin', where='post', linewidth=2.5)
-    ax2.step(t1, I1, color='orange', label='Perturbé', where='post', linewidth=2.5)
-    
-    ax2.axvline(t_star_temoin, color='teal', linestyle='--', alpha=0.7)
-    ax2.axvline(t_star_pert, color='orange', linestyle='--', alpha=0.7)
-    
-    ax2.set_title("Spectral Flow : Nombre de valeurs propres négatives")
-    ax2.set_xlabel("Temps t")
-    ax2.set_ylabel("Inertie")
-    ax2.set_yticks([1, 2, 3, 4])
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
+    # --- Plot 1 : Valeurs propres ---
+    axes[0].plot(t0, c0, label='Témoin', color='teal', linewidth=2)
+    axes[0].plot(t1, c1, label='Perturbé', color='orange', linewidth=2)
+    axes[0].axhline(0, color='k', linewidth=0.8)
+    axes[0].set_ylabel('Crossing Eigenvalue')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    # --- Plot 2 : Dérivées (Exacte vs Numérique) ---
+    axes[1].plot(t0, de0, label='Témoin - Exacte', color='teal', linewidth=2)
+    axes[1].plot(t0, dn0, label='Témoin - Numérique', color='teal', linestyle=':')
+    axes[1].plot(t1, de1, label='Perturbé - Exacte', color='orange', linewidth=2)
+    axes[1].plot(t1, dn1, label='Perturbé - Numérique', color='orange', linestyle=':')
+    axes[1].set_ylabel('d lambda / dt')
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    # --- Plot 3 : Erreur ---
+    axes[2].plot(t0, err0, label='Erreur Témoin', color='teal')
+    axes[2].plot(t1, err1, label='Erreur Perturbé', color='orange')
+    axes[2].set_ylabel('Erreur absolue |exact - num|')
+    axes[2].set_xlabel('t')
+    axes[2].set_yscale('log')
+    axes[2].legend()
+    axes[2].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("preuve_spectral_flow_complete.png", dpi=300)
-    print("Graphique sauvegardé : preuve_spectral_flow_complete.png")
-    
-    # Force l'affichage
+    plt.savefig("preuve_derniere_erreur.png", dpi=300)
+    print("Graphique sauvegardé : preuve_derniere_erreur.png")
     plt.show()
